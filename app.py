@@ -1,7 +1,8 @@
+from flask import Flask, render_template, request
 from langchain import OpenAI, SQLDatabase, SQLDatabaseChain
 from langchain.chat_models import ChatOpenAI
-
 import environ
+
 env = environ.Env()
 environ.Env.read_env()
 
@@ -14,7 +15,6 @@ db = SQLDatabase.from_uri(
 db._include_tables = ["project",  "user", "donation"]
 
 # setup llm
-# llm = OpenAI(temperature=0, openai_api_key=API_KEY, model_name="gpt-4")
 llm = ChatOpenAI( model_name="gpt-4", max_tokens=1000 )
 # Create db chain
 QUERY = """
@@ -32,21 +32,23 @@ Answer: Final answer here
 # Setup the database chain
 db_chain = SQLDatabaseChain(llm=llm, database=db, verbose=True)
 
+app = Flask(__name__)
 
+@app.route('/')
+def home():
+    return render_template('home.html')
+
+@app.route('/get')
 def get_prompt():
-    print("Type 'exit' to quit")
+    prompt = request.args.get('msg')
+    if prompt.lower() == 'exit':
+        return 'Exiting...'
+    else:
+        try:
+            question = QUERY.format(question=prompt)
+            return db_chain.run(question)
+        except Exception as e:
+            return str(e)
 
-    while True:
-        prompt = input("Enter a prompt: ")
-
-        if prompt.lower() == 'exit':
-            print('Exiting...')
-            break
-        else:
-            try:
-                question = QUERY.format(question=prompt)
-                print(db_chain.run(question))
-            except Exception as e:
-                print(e)
-
-get_prompt()
+if __name__ == "__main__":
+    app.run(debug=True)
